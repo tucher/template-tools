@@ -1,5 +1,5 @@
-#ifndef STATIC_STRING_H
-#define STATIC_STRING_H
+#ifndef TYPE_STRING_H
+#define TYPE_STRING_H
 
 #include <type_traits>
 #include <cstddef>
@@ -56,8 +56,8 @@ private:
 public:
     template <int i>
     static constexpr CharType get() {
-        static_assert (i < Size, "out of bound");
-        return get_impl<i, 0, elements...>();
+        if constexpr(i < Size) return  get_impl<i, 0, elements...>();
+        else return 0;
     }
 
     static  constexpr std::array<std::uint8_t, Size/2> hex_to_bytes() {
@@ -128,7 +128,7 @@ constexpr bool  LexCompareHelper(std::index_sequence<Is...>) {
 
 template <typename S1, typename S2, typename = typename std::enable_if<is_ss_v<S1> && is_ss_v<S2>>::type>
 constexpr bool operator<(S1, S2) {
-    return LexCompareHelper<S1, S2>(std::make_integer_sequence<std::size_t, S1::Size < S2::Size? S1::Size: S2::Size >());
+    return LexCompareHelper<S1, S2>(std::make_integer_sequence<std::size_t, S1::Size < S2::Size? S2::Size: S1::Size >());
 }
 
 template <typename S1, typename = typename std::enable_if<is_ss_v<S1>>::type>
@@ -215,4 +215,4 @@ namespace TypeStringLiteralExploder {
 
 #define TS(str) decltype(str ## _ts)
 
-#endif // STATIC_STRING_H
+#endif // TYPE_STRING_H

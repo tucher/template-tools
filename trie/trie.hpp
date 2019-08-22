@@ -2,6 +2,28 @@
 #define TRIE_HPP
 
 #include "../typecalc/typecalc.hpp"
+/*
+Requirements to StringLike objects, are:
+
+    struct StringLike {
+
+    // Length of string
+        static constexpr std::size_t Size = 42;
+
+    // Method to get a character (need not to be char, any char-like type can be here)
+        template<std::size_t i>
+        constexpr static char get() {
+            return 'f';
+        }
+    };
+
+    // Globally available compare operator (must work like lexicographical compare)
+    template <SSSurrogate1,  SSSurrogate2>
+    constexpr bool operator<(SSSurrogate1, SSSurrogate2) {
+        return false;
+    }
+*/
+
 
 namespace StaticTrie {
 
@@ -126,8 +148,8 @@ struct StaticTrie<std::tuple<IndexedStrings...>>
     template<class CharType, class Clb>
     static void search (CharType symbol, Clb clb ) {
         bool to_continue = true;
-        auto searcher= [&]( auto & layer, const auto & self) -> void{
-            using Item =  std::remove_reference_t<decltype (layer)>;
+        auto searcher= [&]( auto * layer, const auto & self) -> void{
+            using Item =  std::remove_pointer_t<decltype (layer)>;
             using LT = typename Item::Layer;
             constexpr CharType key = Item::Key;
 
@@ -141,10 +163,10 @@ struct StaticTrie<std::tuple<IndexedStrings...>>
 
             if constexpr(LT::Last) to_continue = false;
             if(to_continue) {
-                TypeCalc::iterateTuple(typename LT::NextNodes(), self, self);
+                TypeCalc::iterateTypeTuple((typename LT::NextNodes*)nullptr, self, self);
             }
         };
-        TypeCalc::iterateTuple(typename L::NextNodes(), searcher, searcher);
+        TypeCalc::iterateTypeTuple((typename L::NextNodes*)nullptr, searcher, searcher);
     }
 };
 

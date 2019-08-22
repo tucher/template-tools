@@ -29,6 +29,16 @@ void iterateTuple(const std::tuple<Ts...> & tuple, F && func, Args &&...args){
     iterateTuple(tuple, func, std::make_index_sequence<sizeof...(Ts)>(), std::forward<Args>(args)...);
 }
 
+/////////////TYPE TUPLE ITERATION/////////////
+
+
+
+template<class...Ts, class ...Args, class F>
+void iterateTypeTuple(std::tuple<Ts...> *, F && func, Args &&...args) {
+    using expander = int[];
+    (void)expander { 0, ((void)func((Ts*)(nullptr), std::forward<Args>(args)...), 0)... };
+}
+
 /////////////CARTESIAN PRODUCT ITERATION/////////////
 
 
