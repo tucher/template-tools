@@ -1,5 +1,5 @@
-#ifndef TEMPLATE_UTILS_H
-#define TEMPLATE_UTILS_H
+#ifndef TYPECALC_H
+#define TYPECALC_H
 #include <tuple>
 #include <array>
 
@@ -152,24 +152,6 @@ decltype(std::tuple_cat(
 ));
 
 
-/////////////TAKE TYPE FROM TUPLE BY INDEX
-
-template<std::size_t Index, class TupleT>
-struct tuple_type_extracter {};
-
-template<std::size_t Index, class ...TupleTypes>
-struct tuple_type_extracter<Index, std::tuple<TupleTypes...>> {
-    using Tpl = std::tuple<TupleTypes...>;
-    using ExtractedT = std::tuple_element_t<Index, Tpl>;
-    using RestT = tuple_cat_t<tuple_types_interval_t<0, Index, Tpl>, tuple_types_interval_t<Index+1, sizeof... (TupleTypes), Tpl>>;
-};
-
-namespace tuple_type_extractor_test {
-using extr_test = tuple_type_extracter<2, std::tuple<int, float, char>>;
-static_assert(std::is_same_v<extr_test::ExtractedT, char>, "dddd");
-static_assert(std::is_same_v<extr_test::RestT, std::tuple<int, float>>, "dddd");
-}
-
 /////////////
 template<class In>
 struct DefaulExtractor {static constexpr int value = In::value;};
@@ -242,28 +224,148 @@ namespace max_finder_test {
     static_assert (std::is_same_v<max_finder_t<seq, Comparator>::Type, float>);
 }
 
-/////////////SORT TYPES TUPLE ASCENDING BY ::value MEMBER
+///////////// MERGE SORT
+namespace MergeSort {
+template <typename L> struct in2splitter{};
 
-template<class TupleT, class TupleSorted, template<typename, typename> class ValExtractor, typename TTT=void >
-struct sorter {};
-
-template <template<typename, typename> class ValExtractor, class TupleT>
-struct MinRestExtractor{
-    using Min = min_finder_t<TupleT, ValExtractor>;
-    using Rest = typename tuple_type_extracter<tuple_first_type_index_v<Min, TupleT>, TupleT>::RestT;
+template <>
+struct in2splitter<std::tuple<>> {
+    using first = std::tuple<>;
+    using second = std::tuple<>;
 };
 
-template<template<typename, typename> class ValExtractor, class TupleT, class ...Sorted>
-struct sorter<TupleT,  std::tuple<Sorted...>, ValExtractor, std::enable_if_t<0<std::tuple_size_v<TupleT>>>
-    : sorter<typename MinRestExtractor<ValExtractor, TupleT>::Rest, std::tuple<Sorted..., typename MinRestExtractor<ValExtractor, TupleT>::Min>, ValExtractor> {};
-
-template<template<typename, typename> class ValExtractor, class TupleT, class ...Sorted>
-struct sorter<TupleT, std::tuple<Sorted...>, ValExtractor, std::enable_if_t<0 == std::tuple_size_v<TupleT>>> {
-    using type = std::tuple<Sorted...>;
+template <typename M>
+struct in2splitter<std::tuple<M>> {
+    using first = std::tuple<M>;
+    using second = std::tuple<>;
 };
+
+template <typename F, typename S, typename ...Rest>
+struct in2splitter<std::tuple<F, S, Rest...>> {
+    using splitted = in2splitter<std::tuple<Rest...>>;
+    using first = tuple_cat_t<std::tuple<F>, typename splitted::first>;
+    using second = tuple_cat_t<std::tuple<S>, typename splitted::second>;
+};
+namespace splitter_test {
+    template <int i>
+    using I = std::integral_constant<int, i>;
+    using src1 = std::tuple<I<0>, I<1>, I<2>, I<3>, I<4> ,I<5>>;
+    using src2 = std::tuple<I<0>, I<1>>;
+    using splitted2 = in2splitter<src2>;
+    static_assert (std::is_same_v<typename splitted2::first, std::tuple<I<0>>>);
+    static_assert (std::is_same_v<typename splitted2::second, std::tuple<I<1>>>);
+
+    using splitted1 = in2splitter<src1>;
+
+    static_assert (std::is_same_v<typename splitted1::first, std::tuple<I<0>, I<2>, I<4>>>);
+    static_assert (std::is_same_v<typename splitted1::second, std::tuple<I<1>, I<3>, I<5>>>);
+}
+
+template <template<typename, typename> class Cmp, typename L1, typename L2, typename TTT = void> struct merger {};
+template <template<typename, typename> class Cmp, typename ... L2Elems> struct merger<Cmp, std::tuple<>, std::tuple<L2Elems...>> {
+    using ret = std::tuple<L2Elems...>;
+};
+template <template<typename, typename> class Cmp, typename ... L1Elems> struct merger<Cmp, std::tuple<L1Elems...>, std::tuple<>> {
+    using ret = std::tuple<L1Elems...>;
+};
+
+template <template<typename, typename> class Cmp, typename L1H, typename ... L1Elems, typename L2H, typename ... L2Elems>
+struct merger<Cmp, std::tuple<L1H, L1Elems...>, std::tuple<L2H, L2Elems...>, std::enable_if_t <Cmp<L1H, L2H>::value == false> > {
+    using ret = tuple_cat_t<std::tuple<L2H>, typename merger<Cmp,
+        std::tuple<L1H, L1Elems...>, std::tuple<L2Elems...>
+        >::ret>;
+};
+
+template <template<typename, typename> class Cmp, typename L1H, typename ... L1Elems, typename L2H, typename ... L2Elems>
+struct merger<Cmp, std::tuple<L1H, L1Elems...>, std::tuple<L2H, L2Elems...>, std::enable_if_t <Cmp<L1H, L2H>::value == true> > {
+    using ret = tuple_cat_t<std::tuple<L1H>, typename merger<Cmp,
+        std::tuple<L1Elems...>, std::tuple<L2H, L2Elems...>
+        >::ret>;
+};
+
+namespace merger_test {
+    template <int i>
+    using I = std::integral_constant<int, i>;
+    template <typename M1, typename M2> struct Cmp {static constexpr bool value = M1::value < M2::value;};
+    using l1 = std::tuple<I<1>, I<3>, I<5>, I<7>>;
+    using l2 = std::tuple<I<2>, I<4>, I<6>>;
+    using merged = merger<Cmp, l1, l2>::ret;
+
+    static_assert (std::is_same_v<merged, std::tuple<I<1>, I<2>, I<3>, I<4>,I<5>, I<6>, I<7>>>);
+}
+
+template <template<typename, typename> class Cmp, typename L1> struct merge_sorter {};
+template <template<typename, typename> class Cmp> struct merge_sorter<Cmp, std::tuple<>> {
+    using ret = std::tuple<>;
+};
+template <template<typename, typename> class Cmp, typename S> struct merge_sorter<Cmp, std::tuple<S>> {
+    using ret = std::tuple<S>;
+};
+
+template <template<typename, typename> class Cmp, typename F, typename S, typename ... Rest>
+struct merge_sorter<Cmp, std::tuple<F, S, Rest...>> {
+    using splitted = in2splitter<std::tuple<F, S, Rest...>>;
+    using leftSorted = typename merge_sorter<Cmp, typename splitted::first>::ret;
+    using rightSorted = typename merge_sorter<Cmp, typename splitted::second>::ret;
+    using ret = typename merger<Cmp, leftSorted, rightSorted>::ret;
+};
+
+namespace merge_sorter_test {
+    template <int i>
+    using I = std::integral_constant<int, i>;
+    template <typename M1, typename M2> struct Cmp {static constexpr bool value = M1::value < M2::value;};
+    using l = std::tuple<
+I<12>,
+I<9>,
+I<7>,
+I<8>,
+I<18>,
+I<17>,
+I<16>,
+I<6>,
+I<15>,
+I<2>,
+I<19>,
+I<5>,
+I<4>,
+I<13>,
+I<11>,
+I<1>,
+I<3>,
+I<14>,
+I<10>,
+I<20>
+>;
+    using sorted = typename merge_sorter<Cmp, l>::ret;
+
+    static_assert (std::is_same_v<sorted, std::tuple<
+                   I<1>,
+                   I<2>,
+                   I<3>,
+                   I<4>,
+                   I<5>,
+                   I<6>,
+                   I<7>,
+                   I<8>,
+                   I<9>,
+                   I<10>,
+                   I<11>,
+                   I<12>,
+                   I<13>,
+                   I<14>,
+                   I<15>,
+                   I<16>,
+                   I<17>,
+                   I<18>,
+                   I<19>,
+                   I<20>
+
+                   >>);
+}
+}
 
 template<class TupleT, template<typename, typename> class ValExtractor = DefaulCompare >
-using sorted_tuple_t = typename sorter<TupleT, std::tuple<>, ValExtractor>::type;
+using sorted_tuple_t = typename MergeSort::merge_sorter<ValExtractor, TupleT>::ret;
 
 namespace sorted_tuple_test {
 
@@ -536,4 +638,4 @@ static_assert (std::is_same_v<repeater_t<5, bool>, std::tuple<bool, bool, bool, 
 }
 
 }
-#endif // TEMPLATE_UTILS_H
+#endif // TYPECALC_H
