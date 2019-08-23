@@ -9,6 +9,8 @@ template <typename ...T> using type_tuple = std::tuple<T...>;
 
 template <std::size_t I, typename T>
 using tuple_elem_by_index_t = std::tuple_element_t<I, T>;
+template <typename T>
+static constexpr auto tuple_size_v = std::tuple_size_v<T>;
 /////////////TUPLE ITERATION/////////////
 
 template<class F, class...Ts, std::size_t...Is, class ...Args>
