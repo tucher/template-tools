@@ -5,6 +5,10 @@
 
 
 namespace TypeCalc {
+template <typename ...T> using type_tuple = std::tuple<T...>;
+
+template <std::size_t I, typename T>
+using tuple_elem_by_index_t = std::tuple_element_t<I, T>;
 /////////////TUPLE ITERATION/////////////
 
 template<class F, class...Ts, std::size_t...Is, class ...Args>
@@ -396,53 +400,35 @@ static_assert(std::is_same_v<sorted_t,  std::tuple<
 
 /////////////REMOVE DUPLICATES IN SORTED TUPLE
 
-
-template<class SortedTupleT, class DupsFreeTupleT, template<typename> class ValExtractor,  typename TTT=void >
+template<class SortedTupleT, class DupsFreeTupleT, template<typename, typename> class ValExtractor,  typename TTT=void >
 struct unique_only_getter {};
 
-template<template<typename> class ValExtractor>
-struct unique_only_getter<std::tuple<>,  std::tuple<>, ValExtractor>{
-    using type = std::tuple<>;
+template<template<typename, typename> class ValExtractor, typename ...DupsFree>
+struct unique_only_getter<type_tuple<>,  type_tuple<DupsFree...>, ValExtractor>{ //empty
+    using type = type_tuple<DupsFree...>;
 };
 
-template<class SortedTupleHeadT, template<typename> class ValExtractor>
-struct unique_only_getter<std::tuple<SortedTupleHeadT>,  std::tuple<>, ValExtractor>{
-    using type = std::tuple<SortedTupleHeadT>;
+template<class SourceH, class ...SourceRest, template<typename, typename> class ValExtractor>
+struct unique_only_getter<type_tuple<SourceH, SourceRest...>,  type_tuple<>, ValExtractor>:
+        unique_only_getter<type_tuple<SourceRest...>, type_tuple<SourceH>, ValExtractor>
+{
 };
 
-template<class SortedTupleHeadT, class ...SortedTupleOtherTs, template<typename> class ValExtractor>
-struct unique_only_getter<std::tuple<SortedTupleHeadT, SortedTupleOtherTs...>,  std::tuple<>, ValExtractor,
-        std::enable_if_t < 0 < sizeof... (SortedTupleOtherTs)  >>
-    : unique_only_getter<std::tuple<SortedTupleOtherTs...>, std::tuple<SortedTupleHeadT>, ValExtractor> {};
+template<class SourceH, class ...SourceRest, class UniqueH, class ...UniqueRest ,template<typename, typename> class ValExtractor>
+struct unique_only_getter<type_tuple<SourceH, SourceRest...>,  type_tuple<UniqueH, UniqueRest...>, ValExtractor,
+        std::enable_if_t < ValExtractor<SourceH, UniqueH>::value == true > >
+    : unique_only_getter<type_tuple<SourceRest...>, type_tuple<UniqueH, UniqueRest...>, ValExtractor> {};
 
+template<class SourceH, class ...SourceRest, class UniqueH, class ...UniqueRest ,template<typename, typename> class ValExtractor>
+struct unique_only_getter<type_tuple<SourceH, SourceRest...>,  type_tuple<UniqueH, UniqueRest...>, ValExtractor,
+        std::enable_if_t < ValExtractor<SourceH, UniqueH>::value == false > >
+    : unique_only_getter<type_tuple<SourceRest...>, type_tuple<SourceH, UniqueH, UniqueRest...>, ValExtractor> {};
 
-template<class SortedTupleHeadT, class DupsFreeHeadT, class ...DupsFreeTs, template<typename> class ValExtractor>
-struct unique_only_getter<std::tuple<SortedTupleHeadT>,  std::tuple<DupsFreeHeadT, DupsFreeTs...>, ValExtractor,
-        std::enable_if_t < ValExtractor<SortedTupleHeadT>::value != ValExtractor<DupsFreeHeadT>::value > > {
-    using type = std::tuple<SortedTupleHeadT, DupsFreeHeadT, DupsFreeTs...>;
-};
+template<class In1, class In2>
+struct DefaulIsSame {static constexpr int value = In1::value == In2::value;};
 
-template<class SortedTupleHeadT, class DupsFreeHeadT, class ...DupsFreeTs, template<typename> class ValExtractor>
-struct unique_only_getter<std::tuple<SortedTupleHeadT>,  std::tuple<DupsFreeHeadT, DupsFreeTs...>, ValExtractor,
-        std::enable_if_t < ValExtractor<SortedTupleHeadT>::value == ValExtractor<DupsFreeHeadT>::value > > {
-    using type = std::tuple<DupsFreeHeadT, DupsFreeTs...>;
-};
-
-template<class SortedTupleHeadT, class ...SortedTupleOtherTs, class DupsFreeHeadT, class ...DupsFreeTs, template<typename> class ValExtractor>
-struct unique_only_getter<std::tuple<SortedTupleHeadT, SortedTupleOtherTs...>,  std::tuple<DupsFreeHeadT, DupsFreeTs...>, ValExtractor,
-        std::enable_if_t < ValExtractor<SortedTupleHeadT>::value != ValExtractor<DupsFreeHeadT>::value >>
-    : unique_only_getter<std::tuple<SortedTupleOtherTs...>, std::tuple<SortedTupleHeadT, DupsFreeHeadT, DupsFreeTs...>, ValExtractor> {};
-
-
-template<class SortedTupleHeadT, class ...SortedTupleOtherTs, class DupsFreeHeadT, class ...DupsFreeTs, template<typename> class ValExtractor>
-struct unique_only_getter<std::tuple<SortedTupleHeadT, SortedTupleOtherTs...>,  std::tuple<DupsFreeHeadT, DupsFreeTs...>, ValExtractor,
-        std::enable_if_t < ValExtractor<SortedTupleHeadT>::value ==   ValExtractor<DupsFreeHeadT>::value>>
-    : unique_only_getter<std::tuple<SortedTupleOtherTs...>, std::tuple<DupsFreeHeadT, DupsFreeTs...>, ValExtractor > {};
-
-
-
-template<class SortedTupleT, template<typename> class ValExtractor = DefaulExtractor>
-using unique_only_getter_t = typename unique_only_getter<SortedTupleT, std::tuple<>, ValExtractor>::type;
+template<class SortedTupleT, template<typename, typename> class ValExtractor = DefaulIsSame>
+using unique_only_getter_t = typename unique_only_getter<SortedTupleT, type_tuple<>, ValExtractor>::type;
 
 
 namespace unique_only_getter_test {
@@ -470,13 +456,13 @@ static_assert(std::is_same_v<uniques,  std::tuple<
 
 template <int V = 0, class T = void> struct Elem{ static constexpr int erverv = V; using Type = T;};
 
-template <typename In>
-struct Extractor {static constexpr int value = In::erverv;};
+template <typename In1, typename In2>
+struct IsSameTest {static constexpr bool value = In1::erverv == In2::erverv;};
 template <typename In1, typename In2>
 struct Comparator {static constexpr bool value = In1::erverv < In2::erverv;};
 
 using seq = std::tuple<Elem<2, int>, Elem<-1, float>, Elem<8, bool>, Elem<-1, float>, Elem<2, int>>;
-using uniques2 = unique_only_getter_t<sorted_tuple_t<seq, Comparator>, Extractor>;
+using uniques2 = unique_only_getter_t<sorted_tuple_t<seq, Comparator>, IsSameTest>;
 static_assert(std::is_same_v<uniques2,
               std::tuple<Elem<8, bool>, Elem<2, int>, Elem<-1, float>>
               >, "Distinct fail");
@@ -637,5 +623,16 @@ namespace repeater_t_test {
 static_assert (std::is_same_v<repeater_t<5, bool>, std::tuple<bool, bool, bool, bool, bool>> );
 }
 
+/////////////TypeIndex sequence
+
+template <typename>  struct typeindex_sequence{};
+template <std::size_t ... Is>  struct typeindex_sequence<std::index_sequence<Is...>>{
+    using type = type_tuple<std::integral_constant<std::size_t, Is>...>;
+};
+template <std::size_t N>
+using make_typeindex_sequence = typename typeindex_sequence<std::make_index_sequence<N>>::type;
+
 }
+
+
 #endif // TYPECALC_H

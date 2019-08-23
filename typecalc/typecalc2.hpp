@@ -5,7 +5,7 @@
 #include <array>
 
 
-namespace TypeCalc2 {
+namespace TypeCalc {
 
 /////////////Base List
 template <typename ...T>
