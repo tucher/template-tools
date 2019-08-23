@@ -1,6 +1,7 @@
 #ifndef TRIE_HPP
 #define TRIE_HPP
 
+#include "../typecalc/typecalc2.hpp"
 #include "../typecalc/typecalc.hpp"
 /*
 Requirements to StringLike objects, are:
@@ -25,122 +26,117 @@ Requirements to StringLike objects, are:
 */
 
 
-namespace StaticTrie {
+template <typename ... SrcStrings>
+struct StaticTrie
+{
+    using SourceStringsTuple = TypeCalc2::type_tuple<SrcStrings...>;
 
+    template<class Ind> using get_str = typename TypeCalc2::tuple_elem_by_index_t<Ind::value, SourceStringsTuple>;
+    template <class StringI, std::size_t CharI, typename TTT=void > struct ss_char_getter{};
 
-template <std::size_t I, typename  SString, typename TTT=void >
-struct ss_char_getter{};
-
-template <std::size_t I, typename  SString>
-struct ss_char_getter<I, SString, std::enable_if_t<I < SString::Size> >{
-    static constexpr auto value = SString::template get<I>();
-};
-
-template <std::size_t I, typename  SString>
-struct ss_char_getter<I, SString, std::enable_if_t<I >= SString::Size> >{
-    static constexpr auto value = 0;
-};
-
-template <std::size_t I, typename  SString>
-constexpr auto ss_char_getter_v = ss_char_getter<I, SString>::value;
-
-template <std::size_t CurrentIndex, typename KeyIndexedStrings, typename SourceIndexedStrings>
-struct LayerSplitter{};
-
-template <std::size_t I, typename IndexedStrings, typename TTT=void >
-struct TrieLayer{};
-
-
-template<auto K, class V> struct ChildLayerT {
-    static constexpr auto Key = K;
-    using Layer = V;
-};
-
-template <std::size_t I, auto Key, typename AllIndexedStrings> struct split_helper{};
-template <std::size_t I, auto Key, typename ...AllIndexedStrings> struct split_helper<I, Key, std::tuple<AllIndexedStrings...>>{
-    template <typename IndexedStr> struct Filter {
-        static constexpr bool value = ss_char_getter_v<I, typename IndexedStr::ItemT> == Key;
+    template <class StringI, std::size_t CharI>
+    struct ss_char_getter<StringI, CharI, std::enable_if_t<CharI < get_str<StringI>::Size> >{
+        static constexpr auto value = get_str<StringI>::template get<CharI>();
     };
-    using type = TypeCalc::by_value_filterer_t<Filter, std::tuple<AllIndexedStrings...>>;
-};
 
-template < std::size_t I, typename ...KeyIndexedStrings, typename ...AllIndexedStrings>
-struct LayerSplitter<I, std::tuple<KeyIndexedStrings...>, std::tuple<AllIndexedStrings...>>{
-    using type = std::tuple<
-        ChildLayerT<
-            ss_char_getter_v<I, typename KeyIndexedStrings::ItemT>,
-            TrieLayer<I+1, typename split_helper<I,ss_char_getter_v<I, typename KeyIndexedStrings::ItemT>, std::tuple<AllIndexedStrings...> >::type >
-        >...
-    >;
-};
+    template <class StringI, std::size_t CharI>
+    struct ss_char_getter<StringI, CharI, std::enable_if_t<CharI >= get_str<StringI>::Size> >{
+        static constexpr auto value = 0;
+    };
 
-template <typename T> struct SizeExtractor {static constexpr std::size_t value = T::ItemT::Size;};
-template <typename S1, typename S2> struct StringComparator {
-    static constexpr bool value = !(typename S1::ItemT() < typename S2::ItemT());
-}; // TODO
-template <typename S1, typename S2, std::size_t Index> struct CharAtIndexComparator {
-    static constexpr bool value = ss_char_getter_v<Index, typename S1::ItemT> < ss_char_getter_v<Index, typename S2::ItemT>;
-};
+    template <class StringI, std::size_t CharI> static constexpr auto ss_char_getter_v = ss_char_getter<StringI, CharI>::value;
 
-template <typename S1, typename S2> struct StringSizeComparator {
-    static constexpr bool value = S1::ItemT::Size < S2::ItemT::Size;
-};
+    template <typename Indexes, std::size_t LayerI> struct layer_max_str_len {
+        template <typename I1, typename I2> struct StringSizeComparator {
+            static constexpr bool value = get_str<I1>::Size < get_str<I2>::Size;
+        };
+        using max_index = TypeCalc2::max_finder_t<Indexes, StringSizeComparator>;
+        static constexpr std::size_t value =  get_str<max_index>::Size;
+    };
 
-template <std::size_t I,  typename ... StringWithIndex>
-struct TrieLayer<I, std::tuple<StringWithIndex...>,
-        std::enable_if_t< (sizeof...(StringWithIndex) > 1 && I < TypeCalc::max_finder_t<std::tuple<StringWithIndex...>,StringSizeComparator >::ItemT::Size) >
->
-{
-    using InputStringTuple = std::tuple<StringWithIndex ...>;
+    template <std::size_t I, typename ThisStringsIndexes, typename TTT=void >
+    struct TrieLayer{ };
 
-    using ThisStrings = TypeCalc::sorted_tuple_t  <
-        InputStringTuple,
-        StringComparator
-    >;
-    using NodeString = typename std::tuple_element_t<0, ThisStrings>;
-    static constexpr bool HasFullString = I >= NodeString::ItemT::Size;
+    template <std::size_t I, typename ...StringsIndexes> struct TrieLayer<I, TypeCalc2::type_tuple<StringsIndexes...>,
+            std::enable_if_t< (sizeof...(StringsIndexes) > 1 && I < layer_max_str_len<TypeCalc2::type_tuple<StringsIndexes...>, I>::value) >  >
+    {
+        using InputStringIndexes = TypeCalc2::type_tuple<StringsIndexes ...>;
+        template <typename S1, typename S2> struct StringComparator {
+            static constexpr bool value = (get_str<S1>() < get_str<S2>());
+        };
+        using ThisStringsIndexes = TypeCalc2::sorted_tuple_t <InputStringIndexes, StringComparator>;
 
-    private:
-    template<typename S1, typename S2>
-    using comparator = CharAtIndexComparator<S1, S2, I>;
-    template<typename S>
-    using char_extractor = ss_char_getter<I, typename S::ItemT>;
-    using keys = TypeCalc::unique_only_getter_t<TypeCalc::sorted_tuple_t<InputStringTuple, comparator>, char_extractor>;
+        static constexpr std::size_t NodeStringIndex = TypeCalc2::tuple_elem_by_index_t<0, ThisStringsIndexes>::value;
+        static constexpr bool HasFullString = I >= TypeCalc2::tuple_elem_by_index_t<NodeStringIndex, SourceStringsTuple>::Size;
 
-    public:
-    using NextNodes = typename LayerSplitter<I, keys, InputStringTuple>::type;
-    static constexpr bool Last = std::tuple_size_v<NextNodes> == 0;
-};
+        private:
 
-template <std::size_t I, typename ... StringWithIndex>
-struct TrieLayer<I, std::tuple<StringWithIndex...>,
-        std::enable_if_t< (sizeof...(StringWithIndex) == 1 || I == TypeCalc::max_finder_t<std::tuple<StringWithIndex...>,StringSizeComparator >::ItemT::Size) >
->
-{
-    using InputStringTuple = std::tuple<StringWithIndex ...>;
-    using ThisStrings = InputStringTuple;
-    using NodeString = std::tuple_element_t<0, ThisStrings>;
+        template<typename I1, typename I2>  struct comparator {
+            static constexpr bool value = ss_char_getter_v<I1, I> < ss_char_getter_v<I2, I>;
+        };
 
-    static_assert (sizeof... (StringWithIndex) == 1, "Trie error: looks like there are identical strings in source tuple");
-    using NextNodes = std::tuple<>;
-    static constexpr bool HasFullString = true;
-    static constexpr bool Last = true;
-};
+        template<typename I1, typename I2>
+        struct char_Is_same {
+            static constexpr bool value =
+                    ss_char_getter_v<I1, I> == ss_char_getter_v<I2, I>;};
 
-template <typename Src,  typename V = void>
-struct StaticTrie{};
+        using keys = TypeCalc2::unique_only_getter_t<TypeCalc2::sorted_tuple_t<InputStringIndexes, comparator>, char_Is_same>;
 
-template <typename ... IndexedStrings>
-struct StaticTrie<std::tuple<IndexedStrings...>>
-{
+
+        template <typename KeyStringIndexes>
+        struct LayerSplitter{};
+
+        template<auto K, class V> struct ChildLayerT {
+            static constexpr auto Key = K;
+            using Layer = V;
+        };
+
+        template <auto Key> struct split_helper{
+            template <typename StrIndex> struct Filter {
+                static constexpr bool value = ss_char_getter_v<StrIndex, I> == Key;
+            };
+            using type = TypeCalc2::by_value_filterer_t<Filter, InputStringIndexes>;
+        };
+
+        template <typename ...KeyStringIndexes>
+        struct LayerSplitter<TypeCalc2::type_tuple<KeyStringIndexes...>>{
+            using type = TypeCalc2::type_tuple<
+                ChildLayerT<
+                    ss_char_getter_v<KeyStringIndexes, I>,
+                    TrieLayer<I+1, typename split_helper<ss_char_getter_v<KeyStringIndexes, I>>::type >
+                >...
+            >;
+        };
+
+        public:
+        using NextNodes = typename LayerSplitter<keys>::type;
+        static constexpr bool Last = false;
+    };
+
+
+    template <std::size_t I,  typename ...StringsIndexes >
+    struct TrieLayer<I, TypeCalc2::type_tuple<StringsIndexes...>,
+            std::enable_if_t< (sizeof...(StringsIndexes) == 1 || I == layer_max_str_len<TypeCalc2::type_tuple<StringsIndexes...>, I>::value) >
+    >
+    {
+        using InputStringIndexes = TypeCalc2::type_tuple<StringsIndexes ...>;
+        using ThisStringsIndexes = InputStringIndexes;
+        static constexpr std::size_t NodeStringIndex = TypeCalc2::tuple_elem_by_index_t<0, ThisStringsIndexes>::value;
+
+        static_assert (sizeof... (StringsIndexes) == 1, "Trie error: looks like there are identical strings in source tuple");
+        using NextNodes = TypeCalc2::type_tuple<>;
+        static constexpr bool HasFullString = true;
+        static constexpr bool Last = true;
+    };
+
+
     static_assert(true, "Duplicates in source string tuple are not allowed"); //TODO
-    using L = TrieLayer<0, std::tuple<IndexedStrings...>>;
+    using L = TrieLayer<0, TypeCalc2::make_typeindex_sequence<sizeof...(SrcStrings)>>;
 
-    template<bool IsLast, bool HasFull, std::size_t I, typename StringsT, typename NString>
+    template<bool IsLast, bool HasFull, std::size_t I, typename MatchedIndexesSeq>
     struct MatchRes{
-        using MatchedStrings = StringsT;
-        using SourceStrings = std::tuple<IndexedStrings...>;
-        using NodeString = NString;
+        using MatchedStringsIndexes = MatchedIndexesSeq;
+        using NodeString = typename TypeCalc2::tuple_elem_by_index_t<I, SourceStringsTuple>;
         static constexpr bool hasFull = HasFull;
         static constexpr bool isLast = IsLast;
         static constexpr std::size_t index = I;
@@ -155,23 +151,19 @@ struct StaticTrie<std::tuple<IndexedStrings...>>
 
             if(!to_continue || key != symbol) return;
 
-            symbol = clb(MatchRes<LT::Last, LT::HasFullString,
-                              LT::NodeString::I,
-                              typename LT::ThisStrings, typename LT::NodeString::ItemT>{}
+            symbol = clb(MatchRes<LT::Last, LT::HasFullString, LT::NodeStringIndex, typename LT::ThisStringsIndexes>{}
                               );
             if(symbol==-1) to_continue = false;
 
             if constexpr(LT::Last) to_continue = false;
             if(to_continue) {
-                TypeCalc::iterateTypeTuple((typename LT::NextNodes*)nullptr, self, self);
+                TypeCalc2::iterateTypeTuple((typename LT::NextNodes*)nullptr, self, self);
             }
         };
-        TypeCalc::iterateTypeTuple((typename L::NextNodes*)nullptr, searcher, searcher);
+        TypeCalc2::iterateTypeTuple((typename L::NextNodes*)nullptr, searcher, searcher);
     }
 };
 
-template <typename ...SStrings>
-using Trie = StaticTrie<TypeCalc::indexed_types_t<SStrings...>>;
-
-}
+template <typename ... SrcStrings>
+struct StaticTrie<TypeCalc2::type_tuple<SrcStrings...>>: StaticTrie<SrcStrings...>{};
 #endif // TRIE_HPP

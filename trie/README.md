@@ -17,8 +17,7 @@ Everything is done in compile time except of searching, of course.
 
         using namespace TypeStringLiteralExploder;
 
-        using Trie = StaticTrie::StaticTrie<
-            std::tuple <
+        using Trie = StaticTrie<
                 TS("tease"),
                 TS("arrest"),
                 TS("trail"),
@@ -35,7 +34,6 @@ Everything is done in compile time except of searching, of course.
                 TS("care"),
                 TS("bubble"),
                 .....
-            >
         >
     *Memory pressure during compilation is quite scary, but it looks relatively ok for ~100 strings.*
 
@@ -43,11 +41,11 @@ Everything is done in compile time except of searching, of course.
 
         auto clb = [&](auto matchInfo) -> Char {
             using MatchInfo = decltype (matchInfo);
-            iterateTypeTuple((typename MatchInfo::MatchedStrings*)nullptr, [](auto * s){
+            iterateTypeTuple((typename MatchInfo::MatchedStringsIndexes*)nullptr, [](auto * s){
 
                 // Access to currently matched string objects:
 
-                using S = typename std::remove_pointer_t<decltype (s)>::ItemT;
+                using S = Trie::get_str<std::remove_pointer_t<decltype (s)>> ;
                 cout << "\t " << S::c_str() << endl;
             });
 
