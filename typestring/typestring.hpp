@@ -121,14 +121,35 @@ constexpr bool operator==(S1, S2) {
         return compareHelper<S1, S2>(std::make_integer_sequence<std::size_t, S2::Size>());
 }
 
-template <typename S1,  typename S2, std::size_t...Is>
-constexpr bool  LexCompareHelper(std::index_sequence<Is...>) {
-    return (true && ... && (S2::template get<Is>() < S1::template get<Is>()));
-}
+
+template <std::size_t cur, std::size_t M, typename S1, typename S2, class TTT=void> struct lex_comparator;
+template <std::size_t cur, std::size_t M, typename S1, typename S2>
+struct lex_comparator<cur, M, S1, S2, std::enable_if_t<(cur < M && S1::template get<cur>() < S2::template get<cur>())>>
+
+{
+    static constexpr bool value = true;
+};
+
+template <std::size_t cur, std::size_t M, typename S1, typename S2>
+struct lex_comparator<cur, M, S1, S2, std::enable_if_t<(cur < M && S1::template get<cur>() > S2::template get<cur>())>>
+{
+    static constexpr bool value = false
+        ;
+};
+template <std::size_t cur, std::size_t M, typename S1, typename S2>
+struct lex_comparator<cur, M, S1, S2, std::enable_if_t<(cur < M && S1::template get<cur>() == S2::template get<cur>())>>:
+lex_comparator<cur +1, M, S1, S2>{}                                                                                                ;
+
+template <std::size_t cur, std::size_t M, typename S1, typename S2>
+struct lex_comparator<cur, M, S1, S2, std::enable_if_t<(cur == M )>>
+{
+    static constexpr bool value = false;
+};
+
 
 template <typename S1, typename S2, typename = typename std::enable_if<is_ss_v<S1> && is_ss_v<S2>>::type>
 constexpr bool operator<(S1, S2) {
-    return LexCompareHelper<S1, S2>(std::make_integer_sequence<std::size_t, S1::Size < S2::Size? S2::Size: S1::Size >());
+    return lex_comparator<0, S1::Size < S2::Size? S2::Size: S1::Size, S1, S2>::value;
 }
 
 template <typename S1, typename = typename std::enable_if<is_ss_v<S1>>::type>
