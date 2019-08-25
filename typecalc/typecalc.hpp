@@ -15,8 +15,7 @@ static constexpr auto tuple_size_v = std::tuple_size_v<T>;
 
 template<class F, class...Ts, std::size_t...Is, class ...Args>
 void iterateTuple(std::tuple<Ts...> & tuple, F && func, std::index_sequence<Is...>, Args &&...args){
-    using expander = int[];
-    (void)expander { 0, ((void)func(std::get<Is>(tuple), std::forward<Args>(args)...), 0)... };
+    (..., func(std::get<Is>(tuple), std::forward<Args>(args)...));
 }
 
 template<class F, class...Ts, class ...Args>
@@ -26,8 +25,7 @@ void iterateTuple(std::tuple<Ts...> & tuple, F && func, Args...args){
 
 template<class F, class...Ts, std::size_t...Is, class ...Args>
 void iterateTuple(const std::tuple<Ts...> & tuple, F && func, std::index_sequence<Is...>, Args &&...args){
-    using expander = int[];
-    (void)expander { 0, ((void)func(std::get<Is>(tuple), std::forward<Args>(args)...), 0)... };
+    (..., func(std::get<Is>(tuple), std::forward<Args>(args)...));
 }
 
 template<class F, class...Ts, class ...Args>
@@ -41,8 +39,7 @@ void iterateTuple(const std::tuple<Ts...> & tuple, F && func, Args &&...args){
 
 template<class...Ts, class ...Args, class F>
 void iterateTypeTuple(std::tuple<Ts...> *, F && func, Args &&...args) {
-    using expander = int[];
-    (void)expander { 0, ((void)func((Ts*)(nullptr), std::forward<Args>(args)...), 0)... };
+    (..., func((Ts*)(nullptr), std::forward<Args>(args)...));
 }
 
 /////////////CARTESIAN PRODUCT ITERATION/////////////
